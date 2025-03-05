@@ -28,77 +28,52 @@ JalResolutionResult resolve_jal(const N64Recomp::Context& context, size_t cur_se
     }
 
     // Look for symbols with the target vram address
-    const N64Recomp::Section& cur_section = context.sections[cur_section_index];
     const auto matching_funcs_find = context.functions_by_vram.find(target_func_vram);
-    uint32_t section_vram_start = cur_section.ram_addr;
-    uint32_t section_vram_end = cur_section.ram_addr + cur_section.size;
-    bool in_current_section = target_func_vram >= section_vram_start && target_func_vram < section_vram_end;
-    bool exact_match_found = false;
-
-    // Use a thread local to prevent reallocation across runs and to allow multi-threading in the future.
-    thread_local std::vector<size_t> matched_funcs{};
-    matched_funcs.clear();
-
-    // Evaluate any functions with the target address to see if they're potential candidates for JAL resolution.
-    if (matching_funcs_find != context.functions_by_vram.end()) {
-        for (size_t target_func_index : matching_funcs_find->second) {
-            const auto& target_func = context.functions[target_func_index];
-
-            // Zero-sized symbol handling. unless there's only one matching target.
-            if (target_func.words.empty()) {
-                if (!N64Recomp::is_manual_patch_symbol(target_func.vram)) {
-                    continue;
-                }
-            }
-
-            // Immediately accept a function in the same section as this one, since it must also be loaded if the current function is.
-            if (target_func.section_index == cur_section_index) {
-                exact_match_found = true;
-                matched_funcs.clear();
-                matched_funcs.push_back(target_func_index);
-                break;
-            }
-
-            // If the function's section isn't relocatable, add the function as a candidate.
-            const auto& target_func_section = context.sections[target_func.section_index];
-            if (!target_func_section.relocatable) {
-                matched_funcs.push_back(target_func_index);
+    if (matching_funcs_find == context.functions_by_vram.end()) {
+        //fmt::print("Debug: No functions found at VRAM 0x{:08X}\n", target_func_vram);
+        
+        // Print the sections that contain this address and check if we can create a static function
+        for (size_t i = 0; i < context.sections.size(); i++) {
+            const auto& section = context.sections[i];
+            if (target_func_vram >= section.ram_addr && target_func_vram < section.ram_addr + section.size) {
+                /*
+                fmt::print("Debug: Address is in section {} (index {}), VRAM range: 0x{:08X}-0x{:08X}\n", 
+                    section.name, i, section.ram_addr, section.ram_addr + section.size);
+                fmt::print("Debug: Creating static function in section {} ({})\n", i, section.name);
+                //*/
+                return JalResolutionResult::CreateStatic;
             }
         }
+        return JalResolutionResult::NoMatch;
     }
-
-    // If the target vram is in the current section, only allow exact matches.
-    if (in_current_section) {
-        // If an exact match was found, use it.
-        if (exact_match_found) {
-            matched_function_index = matched_funcs[0];
+/*
+    fmt::print("Debug: Found {} potential functions at VRAM 0x{:08X}\n", 
+        matching_funcs_find->second.size(), target_func_vram);
+//*/
+    // First try to find an exact match in the current section
+    for (size_t target_func_index : matching_funcs_find->second) {
+        const auto& target_func = context.functions[target_func_index];
+        if (target_func.section_index == cur_section_index) {
+            matched_function_index = target_func_index;
+            //fmt::print("Debug: Found exact match in current section {}\n", cur_section_index);
             return JalResolutionResult::Match;
         }
-        // Otherwise, create a static function at the target address.
-        else {
-            return JalResolutionResult::CreateStatic;
-        }
-    }
-    // Otherwise, disambiguate based on the matches found.
-    else {
-        // If there were no matches then JAL resolution has failed.
-        // A static can't be created as the target section is unknown.
-        if (matched_funcs.size() == 0) {
-            return JalResolutionResult::NoMatch;
-        }
-        // If there was an exact match, use it.
-        else if (matched_funcs.size() == 1) {
-            matched_function_index = matched_funcs[0];
-            return JalResolutionResult::Match;
-        }
-        // If there's more than one match, use an indirect jump to resolve the function at runtime.
-        else {
-            return JalResolutionResult::Ambiguous;
-        }
     }
 
-    // This should never be hit, so return an error.
-    return JalResolutionResult::Error;
+    // If no match in current section, look through all sections
+    for (size_t target_func_index : matching_funcs_find->second) {
+        const auto& target_func = context.functions[target_func_index];
+        const auto& target_section = context.sections[target_func.section_index];
+        matched_function_index = target_func_index;
+        /*
+        fmt::print("Debug: Found match in section {} ({})\n", 
+            target_func.section_index, target_section.name);
+        //*/
+        return JalResolutionResult::Match;
+    }
+
+    fmt::print("Debug: No valid match found for function at VRAM 0x{:08X}\n", target_func_vram);
+    return JalResolutionResult::NoMatch;
 }
 
 using InstrId = rabbitizer::InstrId::UniqueId;
