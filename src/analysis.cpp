@@ -314,14 +314,25 @@ bool N64Recomp::analyze_function(const N64Recomp::Context& context, const N64Rec
             end_address = stats.jump_tables[i + 1].vram;
         }
 
-        // TODO this assumes that the jump table is in the same section as the function itself
-        cur_jtbl.rom = cur_jtbl.vram + func.rom - func.vram;
-        cur_jtbl.section_index = func.section_index;
+        // Find which section contains this jump table
+        cur_jtbl.section_index = -1;
+        for (size_t sect_idx = 0; sect_idx < context.sections.size(); sect_idx++) {
+            const auto& section = context.sections[sect_idx];
+            if (vram >= section.ram_addr && vram < section.ram_addr + section.size) {
+                cur_jtbl.section_index = sect_idx;
+                cur_jtbl.rom = vram - section.ram_addr + section.rom_addr;
+                break;
+            }
+        }
+
+        if (cur_jtbl.section_index == -1) {
+            fmt::print("Failed to find section for jump table at 0x{:08X}\n", vram);
+            return false;
+        }
 
         while (vram < end_address) {
-            // Retrieve the current entry of the jump table
-            // TODO same as above
-            uint32_t rom_addr = vram + func.rom - func.vram;
+            // Retrieve the current entry of the jump table using the correct section's ROM offset
+            uint32_t rom_addr = vram - context.sections[cur_jtbl.section_index].ram_addr + context.sections[cur_jtbl.section_index].rom_addr;
             uint32_t jtbl_word = byteswap(*reinterpret_cast<const uint32_t*>(&context.rom[rom_addr]));
 
             if (cur_jtbl.got_offset.has_value() && got_ram_addr.has_value()) {
