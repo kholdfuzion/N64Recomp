@@ -58,7 +58,6 @@ const std::unordered_set<std::string> N64Recomp::reimplemented_funcs {
     // Parallel interface (cartridge, DMA, etc.) functions
     "osCartRomInit",
     "osCreatePiManager",
-    "osPiReadIo",
     "osPiStartDma",
     "osEPiStartDma",
     "osPiGetStatus",
@@ -138,7 +137,7 @@ const std::unordered_set<std::string> N64Recomp::reimplemented_funcs {
     "__ull_to_f",
 };
 
-const std::unordered_set<std::string> N64Recomp::ignored_funcs {
+const std::unordered_set<std::string> N64Recomp::ignored_funcs{
     // OS initialize functions
     "__createSpeedParam",
     "__osInitialize_common",
@@ -269,6 +268,7 @@ const std::unordered_set<std::string> N64Recomp::ignored_funcs {
     "__osDevMgrMain",
     "osPiGetCmdQueue",
     "osPiGetStatus",
+    "osPiReadIo",
     "osPiStartDma",
     "osPiWriteIo",
     "osEPiGetDeviceType",
@@ -564,7 +564,9 @@ const std::unordered_set<std::string> N64Recomp::renamed_funcs {
     "cosf",
     "__sinf",
     "__cosf",
+    "asin",
     "asinf",
+    "acos",
     "acosf",
     "atanf",
     "atan2f",
@@ -573,6 +575,13 @@ const std::unordered_set<std::string> N64Recomp::renamed_funcs {
     "sqrtf",
 
     // Memory
+    "isalpha",
+    "isdigit",
+    "isspace",
+    "toupper",
+    "tolower",
+    "strncmp",
+    "strncpy",
     "memcpy",
     "memset",
     "memmove",
@@ -583,6 +592,7 @@ const std::unordered_set<std::string> N64Recomp::renamed_funcs {
     "strchr",
     "strlen",
     "strtok",
+    "strtol",
     "sprintf",
     "bzero",
     "bcopy",
